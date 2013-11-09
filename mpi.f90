@@ -1,9 +1,8 @@
 !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         subroutine MPI_START
-        use dimrel
+        use dimrel,only: ierr,id_proc,num_proc
         implicit none
         include 'mpif.h'
-        integer :: ierr   !,id_proc,num_proc
 
         call MPI_Init(ierr)
         if (ierr /= MPI_SUCCESS) then
@@ -12,17 +11,17 @@
         call MPI_Comm_rank(MPI_COMM_WORLD, id_proc , ierr)
         call MPI_Comm_size(MPI_COMM_WORLD, num_proc, ierr)
         
-!!$        if(id_proc.eq.0) &
-!!$        write(filenum,'(x,a,i3)')'>> Number of Processors = ',num_proc
-!!$
-!!$        print *,'>> Processor ', id_proc+1, 'of',num_proc,'...[OK]'
+        if(id_proc.eq.0) &
+        write(*,'(x,a,i3)')'>> Number of Processors = ',num_proc
+
+        print *,'>> Processor ', id_proc+1, 'of',num_proc,'...[OK]'
         end subroutine MPI_START
 !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         subroutine stop_all
-        implicit none
-        include 'mpif.h'
-
-        integer :: ierr,id_proc,num_proc
+          use dimrel,only: ierr,id_proc,num_proc
+          implicit none
+          include 'mpif.h'
+         
         call MPI_Barrier(MPI_COMM_WORLD,ierr)
         call MPI_Finalize(ierr)
         stop'stop all successfully'

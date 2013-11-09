@@ -1,10 +1,10 @@
 Module dimrel
       implicit none
 
-      integer :: id_proc, num_proc
+      double precision, parameter :: pi=4.0d0*datan(1.0d0)
 
+      integer :: id_proc, num_proc, ierr
       integer,parameter::MAXNMCS=1000000
-      ! 10^8
 
       integer::casemode
       integer::filenum
@@ -19,7 +19,7 @@ Module dimrel
       double precision,dimension(20,20)::fmeandbleprime,fvardbleprime
       
       double precision,dimension(20)::dat
-
+    
       logical::mainprog
       integer::OUUflag
 
