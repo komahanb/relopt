@@ -1,4 +1,4 @@
 cd ..
 make
 cd -
-mpiexec -np 16 ../reliability |tee screen
+mpiexec -np 8 ../reliability |tee screen
