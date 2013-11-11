@@ -35,14 +35,14 @@ LIBS = -ldl -lstdc++
 #export:
 #    ar rvs pcestimate.a *.o
 
-SRCS = dimrel.o mpi.o main.o randomroutines.o
+SRCS = dimrel.o mpi.o main.o randomroutines.o threebarcost.o BFGSroutines.o optimize.o CalcstuffBFGS.o
 
 OBJS =  ${SRCS:.$(SUF)=.o}
 
 all:  $(TARGET)
 
 $(TARGET): $(OBJS) 
-	$(F90) $(FFLAGS) -o $(TARGET) $(OBJS)  $(LFLAGS) -Wl,-rpath=.
+	$(F90) $(FFLAGS) -o $(TARGET) $(OBJS)   $(LFLAGS) -Wl,-rpath=.
 	@echo " ----------- ${TARGET} created ----------- "
 
 ######################################

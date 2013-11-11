@@ -18,25 +18,61 @@ program reliability
   double precision, allocatable, dimension(:,:) :: MNCx
   double precision :: dinvnorm
   double precision :: pfail
+  double precision :: conval
+  double precision :: dummy(6)
+  double precision :: MCm, MCmglb
+
+  integer::ict,ictglb
+
+  double precision :: Mcd
+  real*8:: gamma
   integer :: is,ie,idec
 
   integer::beta
-
   integer:: idx,idxglb,id
+
+  double precision:: par(20,2)
 
   !*******************************************
   !          MAIN PROGRAM                    !
   !*******************************************
 
   call MPI_START
-
-  ndim=1  
-  NMCS=100000000
+  gamma=0.1
+  ndim=6
+  NMCS=10000000
 
   beta= 1 !reliability index
 
-  xavg(:)=2.0d0
-  xstd(:)=0.2d0
+  xavg(1)= 2.0               !5.00000000000000d0
+  xavg(2)= 2.0               !1.64673533435250d0
+  xavg(3)= 2.0               !2.62561402464512d0
+
+  xavg(4)=45.0*pi/180.0    !37.4774201949629*pi/180.0
+  xavg(5)=90.0*pi/180.0    !60.0000000000000*pi/180.0
+  xavg(6)=135.0*pi/180.0   !149.426453781432*pi/180.0
+
+  xstd(1:3)=0.1d0
+  xstd(4:6)=1.0*pi/180.0
+
+  do j=1,3
+
+     par(j,1)= -0.1d0  !lower bound
+     par(j,2)= 0.1d0  !upper bound
+
+  end do
+
+!!$  if (id_proc.eq.0) then
+!!$    print*,xavg(1:6)
+!!$
+!!$     call epigrads(0,7,3,6,xavg,xstd)
+!!$
+!!$     print*,xavg(1:6)
+!!$
+!!$  end if
+!!$
+!!$  call  stop_all
+!!$!  call optimize
   
   ! Allocate memory for MC samples and corresponding f(x)
   
@@ -60,11 +96,21 @@ program reliability
   is   = idec*id_proc + 1
   ie   = idec*(id_proc+1)
   if(id_proc.eq.num_proc-1)ie = NMCS 
+  
+  
+  ! Random within tolerance 
+  
+  do j = is,ie !1, NMCS
+     do k=1,3   
+        MNCx(k,j)= xavg(k)+ (par(k,2)-par(k,1))*MNCx(k,j)
+        MNCX(k,j)=MNCX(k,j)-0.10
+     end do
+  end do
 
   ! Normally distribute with given mean and standard deviation
 
   do j = is,ie !1, NMCS
-     do k=1,ndim 
+     do k=4,ndim 
         MNCx(k,j)=xavg(k)+dinvnorm(MNCx(k,j))*xstd(k)
      end do
   end do
@@ -82,29 +128,48 @@ program reliability
   is   = idec*id_proc + 1
   ie   = idec*(id_proc+1)
   if(id_proc.eq.num_proc-1)ie = NMCS 
-
+  
   if (id_proc.eq.0)print*,"NMCS = ",NMCS
+
   if (id_proc.eq.0)print*,'====================================================================='
   if (id_proc.eq.0) write(*,'(4a)') '   Rel. Index','  Violated   ','   P_fail  ','                P_k=1.0-P_fail'
-if (id_proc.eq.0)print*,'======================================================================'
-  do beta=0,6 
+  if (id_proc.eq.0)print*,'======================================================================'
 
+  do beta=6,6
+
+     ict=0
      idx=0
+     mcm=0.0
 
      do ii=is,ie
 
-        if ((MNCx(1,ii)).gt. (xavg(1)+dble(beta)*xstd(1)) ) idx=idx+1
-        ! we are having a linear limit state function, that says failure is when the samples fall below beta*sigma 's
+        ict=ict+1
+
+
+!        MNCf(ii)= mncx(1,ii)*gamma*10.0/sin(mncx(4,ii)) + mncx(2,ii)*gamma*10.0/sin(mncx(5,ii)) +  mncx(3,ii)*gamma*10.0/sin(mncx(6,ii))
+        
+        call CalcstuffBFGS(MNCx(:,ii),6,MNCf(ii),dummy,8)
+!        if (id_proc.eq.0) print *, MNCF(ii)
+
+        MCm=MCm+MNCF(ii)
+
+!        call stop_all
+!        if (id_proc.eq.0) print *,MNCx(:,ii) , MNCF(ii)
+
+        if (MNCf(ii) .gt.0.0d0)  idx=idx+1
 
      end do
 
+     call MPI_ALLREDUCE(MCm,MCmglb,1,MPI_DOUBLE_PRECISION,MPI_SUM,MPI_COMM_WORLD,ierr)
      call MPI_ALLREDUCE(idx,idxglb,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr)
+     call MPI_ALLREDUCE(ict,ictglb,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr)
 
      pfail=dble(idxglb)/dble(nmcs)
 
-     if (id_proc.eq.0) print*,beta,idxglb,pfail,1.0-pfail
+     if (id_proc.eq.0) print*,beta,idxglb,pfail,1.0-pfail ,MCMglb/dble(ictglb)
 
   end do
+
 if (id_proc.eq.0)print*,'======================================================================'
 
   if (id_proc.eq.0) then
@@ -123,8 +188,8 @@ if (id_proc.eq.0)print*,'=======================================================
 
   end if
 
-
   call MPI_Barrier(MPI_COMM_WORLD,ierr) ! All wait until master gets here
+
   !*******************************************
   !          END OF MAIN PROGRAM             !
   !*******************************************
@@ -140,7 +205,28 @@ if (id_proc.eq.0)print*,'=======================================================
 
 end program reliability
 
-!+++++++++++++++++++++++++++++++++
+!++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+subroutine epigrads(fct,fctindx,dim,ndimt,xtmp,xstdt)
+  use omp_lib
+
+  implicit none
+  integer :: DIM,ndimt,fct,fctindx
+  real*8,intent(inout)  :: xtmp(ndimt)
+  real*8,intent(in)     :: xstdt(ndimt)
+  real*8   :: dftmp(ndimt)
+  real*8::ftmp
+  real*8 :: gtol,low(ndimt-DIM),up(ndimt-DIM)
+
+  gtol=1e-6
+
+  low(1:ndimt-DIM)= xtmp(1:ndimt-DIM)  - 0.10
+  up(1:ndimt-DIM) = xtmp(1:ndimt-DIM)  - 0.10
+
+  call optimize(ndimt-DIM,xtmp,ndimt,ftmp,dftmp,low,up,gtol,.false.,.false.,fctindx)
+
+  return
+end subroutine epigrads
+!++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 !!$
 !!$
